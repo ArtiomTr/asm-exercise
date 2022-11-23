@@ -301,7 +301,6 @@ construct_full_filename PROC near
     construct_full_filename_exit:
         ; End filename
         mov al, '$'
-        inc di
         mov ds:[di], al
         
         ; Return
