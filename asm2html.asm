@@ -41,11 +41,13 @@ COMMENT_FLAG equ 00000001b
 STRING_FLAG equ 00000010b
 CHAR_FLAG equ 00000100b
 NUMERIC_FLAG equ 00001000b
+WORD_FLAG equ 00010000b
 NUMERIC_MASK equ 11110111b
+WORD_MASK equ 11101111b
 
 ; HTML generation constants
 HTML_OPEN_SIZE equ 217
-HTML_BODY_SIZE equ 653
+HTML_BODY_SIZE equ 777
 HTML_CLOSE_SIZE equ 38
 HTML_ROW_SIZE equ 33
 HTML_NODE_OPEN_SIZE equ 16
@@ -108,6 +110,7 @@ JUMPS
                     db "    .row {", ASCII_CR, ASCII_LF
                     db "        white-space: pre;", ASCII_CR, ASCII_LF
                     db "        font-family: monospace;", ASCII_CR, ASCII_LF
+                    db "        min-height: 1em;", ASCII_CR, ASCII_LF
                     db "    }", ASCII_CR, ASCII_LF
                     db "    .row .c {", ASCII_CR, ASCII_LF
                     db "        color: #529955;", ASCII_CR, ASCII_LF
@@ -117,6 +120,12 @@ JUMPS
                     db "    }", ASCII_CR, ASCII_LF
                     db "    .row .n {", ASCII_CR, ASCII_LF
                     db "        color: #B5CEA8;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row .l, .i {", ASCII_CR, ASCII_LF
+                    db "        color: #4B9AD6;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row .k {", ASCII_CR, ASCII_LF
+                    db "        color: #C584C0;", ASCII_CR, ASCII_LF
                     db "    }", ASCII_CR, ASCII_LF
                     db "</style>", ASCII_CR, ASCII_LF
                     db "</head>", ASCII_CR, ASCII_LF
@@ -141,6 +150,24 @@ JUMPS
 ; Syntax highlight variables
     state_flags db 0
     should_close db FALSE
+; Keywords
+    key_definebyte db "db$"
+    key_defineword db "dw$"
+    key_equals db 'e', "qu$"
+    key_byte db "byte$"
+    key_word db "word$"
+    key_ptr db "ptr$"
+; Insturctions
+    inst_mov db "mov$"
+    inst_call db "call$"
+    inst_je db "je$"
+    inst_lea db "lea$"
+    inst_cmp db "cmp$"
+    inst_int db "int$"
+    inst_jne db "jne$"
+    inst_jmp db "jmp$"
+    inst_push db "push$"
+    inst_inc db "inc$"
 .code
 
 start:
@@ -393,7 +420,7 @@ highlight_buffer PROC near
         mov al, ds:[di]
         or al, 20h
 
-        ; Check, if it is a-f, then skip processing
+        ; Check, if it is a-f, then treat as numeric
         sub al, 'a'
         cmp al, 'f' - 'a'
         jbe highlight_buffer_postprocess
@@ -407,6 +434,36 @@ highlight_buffer PROC near
 
     ; Skip keyword check
     highlight_skip_numeric:
+
+        mov al, state_flags
+        and al, WORD_MASK
+        cmp al, 0
+        jne highlight_buffer_postprocess
+
+        cmp byte ptr ds:[di], '.'
+        je highlight_word_group
+
+        mov al, ds:[di]
+        or al, 20h
+        sub al, 'a'
+        cmp al, 'z' - 'a'
+        jbe highlight_word_group
+
+        cmp byte ptr ds:[di], '_'
+        je highlight_word_group
+        
+        cmp state_flags, WORD_FLAG
+        jne highlight_buffer_postprocess
+
+        mov al, ds:[di]
+        sub al, '0'
+        cmp al, 9
+        jbe highlight_word_group
+
+        cmp byte ptr ds:[di], ':'
+        je highlight_word_group
+
+        jmp highlight_word_group_end   
 
     ; Do character postprocessing
     highlight_buffer_postprocess:
@@ -449,6 +506,22 @@ highlight_buffer PROC near
         ret
 
     ; Group matching
+    highlight_word_group:
+        cmp state_flags, WORD_FLAG
+        je highlight_word_group_begin_skip
+        lea si, identifier
+    highlight_word_group_begin_skip:
+        mov al, ds:[di]
+        mov ds:[si], al
+        inc si
+        mov state_flags, WORD_FLAG
+        jmp highlight_buffer_continue
+    highlight_word_group_end:
+        mov byte ptr ds:[si], '$'
+        call pick_word_type
+
+        mov state_flags, 0
+        jmp highlight_buffer_postprocess
     highlight_numeric_group:
         cmp state_flags, NUMERIC_FLAG
         je highlight_buffer_postprocess
@@ -538,6 +611,22 @@ highlight_buffer PROC near
         jmp highlight_buffer_continue
     
     highlight_eol:
+        cmp should_close, TRUE
+        jne highlight_eol_skip
+
+        mov should_close, FALSE
+        mov state_flags, 0
+
+        push cx
+
+        mov ah, SYS_WRITE_FILE
+        mov bx, destination_file_handle
+        lea dx, html_node_close
+        mov cx, HTML_NODE_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        pop cx
+    highlight_eol_skip:    
         cmp state_flags, COMMENT_FLAG
         je highlight_group_comment_close
         jmp highlight_new_line
@@ -583,6 +672,103 @@ highlight_buffer PROC near
         pop cx
         jmp highlight_buffer_continue
 highlight_buffer ENDP
+
+check_keyword PROC near
+    check_keyword_loop:
+        mov al, ds:[di]
+        mov ah, ds:[si]
+        cmp ah, al
+        jne check_keyword_failure
+        inc si
+        inc di
+        cmp byte ptr ds:[si], '$'
+        jne check_keyword_loop
+
+        mov al, TRUE
+        ret
+    check_keyword_failure:
+        mov al, FALSE
+        ret 
+ENDP
+
+CheckKeyword macro keyword
+    lea di, keyword
+    lea si, identifier
+    call check_keyword
+    cmp al, TRUE
+    je pick_word_type_keyword
+endm CheckKeyword
+
+CheckInstruction macro instruction
+    lea di, instruction
+    lea si, identifier
+    call check_keyword
+    cmp al, TRUE
+    je pick_word_type_instruction
+endm CheckInstruction
+
+pick_word_type PROC near
+        push cx
+        push di
+        lea si, identifier
+        cmp byte ptr ds:[si], '.'
+        je pick_word_type_label
+
+        CheckKeyword key_definebyte
+        CheckKeyword key_defineword
+        CheckKeyword key_equals
+        CheckKeyword key_byte
+        CheckKeyword key_word
+        CheckKeyword key_ptr
+        
+        CheckInstruction inst_mov
+        CheckInstruction inst_call
+        CheckInstruction inst_je
+        CheckInstruction inst_lea
+        CheckInstruction inst_cmp
+        CheckInstruction inst_int
+        CheckInstruction inst_cmp
+        CheckInstruction inst_jne
+        CheckInstruction inst_jmp
+        CheckInstruction inst_push
+        CheckInstruction inst_inc
+
+        jmp pick_word_type_empty
+    pick_word_type_label:
+        mov html_node_type, 'l'
+
+        jmp pick_word_type_open
+    pick_word_type_instruction:
+        mov html_node_type, 'i'
+
+        jmp pick_word_type_open
+    pick_word_type_keyword:
+        mov html_node_type, 'k'
+
+        jmp pick_word_type_open
+    pick_word_type_empty:
+        mov html_node_type, 'e'
+    pick_word_type_open:
+        lea dx, html_node_open
+        mov bx, destination_file_handle
+        mov cx, HTML_NODE_OPEN_SIZE
+        mov ah, SYS_WRITE_FILE
+        int INT_FUN_DISPATCH
+
+        lea dx, identifier
+        mov bx, destination_file_handle
+        call write_string_to_file
+
+        mov ah, SYS_WRITE_FILE
+        mov bx, destination_file_handle
+        lea dx, html_node_close
+        mov cx, HTML_NODE_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        pop di
+        pop cx
+        ret
+pick_word_type ENDP
 
 create_html PROC near
         push si
