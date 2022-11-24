@@ -61,6 +61,7 @@ FALSE equ 0
 .stack 100h
 
 JUMPS
+LOCALS @@
 
 .data
     help db "Generates html page, displaying assmelby code (with syntax highlight)", ASCII_CR, ASCII_LF, ASCII_CR, ASCII_LF, \
@@ -150,29 +151,33 @@ JUMPS
 ; Syntax highlight variables
     state_flags db 0
     should_close db FALSE
-; Keywords
-    key_definebyte db "db$"
-    key_defineword db "dw$"
-    key_equals db 'e', "qu$"
-    key_byte db "byte$"
-    key_word db "word$"
-    key_ptr db "ptr$"
-; Insturctions
-    inst_mov db "mov$"
-    inst_call db "call$"
-    inst_je db "je$"
-    inst_lea db "lea$"
-    inst_cmp db "cmp$"
-    inst_int db "int$"
-    inst_jne db "jne$"
-    inst_jmp db "jmp$"
-    inst_push db "push$"
-    inst_inc db "inc$"
+    keywords db "db dw equ byte word ptr near$"
+    instructions db "aaa aad aam aas adc add and arpl "
+                 db "bound bsf bsr bswap bt btc btr bts "
+                 db "call cbw cdq clc cld cli clts cmc cmp cmps cwde "
+                 db "daa das dec div "
+                 db "enter esc "
+                 db "fwait "
+                 db "hlt "
+                 db "idiv imul in inc ins insb insd insw int into invd invlpg iret iretd "
+                 db "ja jae jb jbe jc jcxz je jecxz jg jge jl jle jmp jna jnae jnb jnbe jnc jne jnge jnl jnle jno jnp jns jnz jo jp jpe jpo js jz "
+                 db "lahf lar lds lea leave les lfs lgdt lgs lidt lldt lmsw lock lods lodsb lodsd lodsw loop loope loopne loopnz loopz lsl lss ltr "
+                 db "mov movs movsb movsd movsw movsx movzx msw mul "
+                 db "neg nop not "
+                 db "or out outs outsb outsd outsw "
+                 db "pop popa popad popf popfd push pusha pushad pushf pushfd "
+                 db "rcl rcr rep repe repne repnz repz ret retf retn rol ror "
+                 db "sahf sal sar sbb scas scasb scasd scasw setae setb setbe setc sete setg setge setl setle setna setnae setnb setnc setne setng "
+                 db "setnge setnl setnle setno setnp setns setnz seto setp setpe setpo sets setz sgdt shl shld shr shrd sidt sldt smsw stc std sti stos stosb stosd stosw str sub "
+                 db "test "
+                 db "verr verw "
+                 db "wait wbinvd "
+                 db "xchg xlat xlatb xor$"
 .code
 
 start:
     ; Swap data from data segment into extra segment
-    mov dx, ds
+    MOV dx, ds
     mov es, dx
 
     ; Put data into data segment
@@ -673,82 +678,106 @@ highlight_buffer PROC near
         jmp highlight_buffer_continue
 highlight_buffer ENDP
 
-check_keyword PROC near
-    check_keyword_loop:
-        mov al, ds:[di]
+match_keyword PROC near
+        lea si, identifier
+        mov al, TRUE
+    @@start:
+        ; Take keyword char
+        mov bh, ds:[di]
+
+        ; Check if keyword end reached
+        cmp bh, ' '
+        je @@keyword_end
+
+        ; Check if keyword array end
+        cmp bh, '$'
+        je @@last_keyword
+
+        ; Take identifier char
         mov ah, ds:[si]
-        cmp ah, al
-        jne check_keyword_failure
+
+        ; Check if identifier ended
+        cmp ah, '$'
+        je @@identifier_end
+
+        ; Convert to lowercase
+        or bh, 20h
+        or ah, 20h
+
+        ; Compare characters
+        cmp ah, bh
+        jne @@identifier_neq
+    @@continue:
         inc si
         inc di
-        cmp byte ptr ds:[si], '$'
-        jne check_keyword_loop
-
-        mov al, TRUE
-        ret
-    check_keyword_failure:
+        jmp @@start
+    @@identifier_neq:
+        ; If identifier character is not equal to keyword, update flag
         mov al, FALSE
+        jmp @@continue
+    @@identifier_end:
+        ; Reset identifier index
+        lea si, identifier
+        ; Update flag 
+        mov al, FALSE
+        jmp @@continue
+    @@keyword_end:
+        ; If identifier end not reached, skip check
+        cmp byte ptr ds:[si], '$'
+        jne @@keyword_skip
+
+        ; If identifier is equal to keyword, exit
+        cmp al, TRUE
+        je @@exit
+    @@keyword_skip:
+        ; Reset identifier index
+        lea si, identifier
+        ; Skip space character
+        inc di
+        ; Reset result flag
+        mov al, TRUE
+        jmp @@start
+    @@last_keyword:
+        cmp byte ptr ds:[si], '$'
+        je @@exit
+        mov al, FALSE
+    @@exit:
         ret 
 ENDP
-
-CheckKeyword macro keyword
-    lea di, keyword
-    lea si, identifier
-    call check_keyword
-    cmp al, TRUE
-    je pick_word_type_keyword
-endm CheckKeyword
-
-CheckInstruction macro instruction
-    lea di, instruction
-    lea si, identifier
-    call check_keyword
-    cmp al, TRUE
-    je pick_word_type_instruction
-endm CheckInstruction
 
 pick_word_type PROC near
         push cx
         push di
         lea si, identifier
         cmp byte ptr ds:[si], '.'
-        je pick_word_type_label
+        je @@label
 
-        CheckKeyword key_definebyte
-        CheckKeyword key_defineword
-        CheckKeyword key_equals
-        CheckKeyword key_byte
-        CheckKeyword key_word
-        CheckKeyword key_ptr
-        
-        CheckInstruction inst_mov
-        CheckInstruction inst_call
-        CheckInstruction inst_je
-        CheckInstruction inst_lea
-        CheckInstruction inst_cmp
-        CheckInstruction inst_int
-        CheckInstruction inst_cmp
-        CheckInstruction inst_jne
-        CheckInstruction inst_jmp
-        CheckInstruction inst_push
-        CheckInstruction inst_inc
+        lea di, keywords
+        call match_keyword
+        cmp al, TRUE
+        je @@keyword
 
-        jmp pick_word_type_empty
-    pick_word_type_label:
+        lea di, instructions
+        call match_keyword
+        cmp al, TRUE
+        je @@instruction
+
+        jmp @@unknown
+    @@label:
         mov html_node_type, 'l'
 
-        jmp pick_word_type_open
-    pick_word_type_instruction:
+        jmp @@dump
+    @@instruction:
         mov html_node_type, 'i'
 
-        jmp pick_word_type_open
-    pick_word_type_keyword:
+        jmp @@dump
+    @@keyword:
         mov html_node_type, 'k'
 
-        jmp pick_word_type_open
-    pick_word_type_empty:
+        jmp @@dump
+    @@unknown:
         mov html_node_type, 'e'
-    pick_word_type_open:
+    @@dump:
         lea dx, html_node_open
         mov bx, destination_file_handle
         mov cx, HTML_NODE_OPEN_SIZE
