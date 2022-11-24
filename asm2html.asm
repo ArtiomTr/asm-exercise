@@ -7,6 +7,7 @@ ASCII_SPACE equ 20h ; space ' '
 ASCII_HELP_WORD equ 3F2Fh ; help string ("/?")
 ASCII_QUOTE equ '"'
 ASCII_BACKSLASH equ 5Ch
+ASCII_SINGLE_QUOTE equ 27h
 
 ; Interrupt codes
 INT_FUN_DISPATCH equ 21h
@@ -32,17 +33,27 @@ FILE_READ equ 0h
 CL_ARGUMENTS_START equ 81h
 FILENAME_MAX_LENGTH equ 8
 EXTENSION_MAX_LENGTH equ 3
-BUFFER_SIZE equ 1000
+BUFFER_SIZE equ 20
+IDENTIFIER_BUFFER_SIZE equ 1024
 
-; Booleans
-TRUE equ 1h
-FALSE equ 0h
+; Flags
+COMMENT_FLAG equ 00000001b
+STRING_FLAG equ 00000010b
+CHAR_FLAG equ 00000100b
+NUMERIC_FLAG equ 00001000b
+NUMERIC_MASK equ 11110111b
 
 ; HTML generation constants
 HTML_OPEN_SIZE equ 217
-HTML_BODY_SIZE equ 174
+HTML_BODY_SIZE equ 653
 HTML_CLOSE_SIZE equ 38
 HTML_ROW_SIZE equ 33
+HTML_NODE_OPEN_SIZE equ 16
+HTML_NODE_CLOSE_SIZE equ 7
+
+; Boolean
+TRUE equ 1
+FALSE equ 0
 
 .model small
 .stack 100h
@@ -67,32 +78,60 @@ JUMPS
     destination_file_handle dw ?
     source_file_handle dw ?
     buffer db BUFFER_SIZE dup (?), '$'
+    identifier db IDENTIFIER_BUFFER_SIZE dup (?), '$'
 
 ; HTML generation template
-    html_open db       "<!DOCTYPE html>", ASCII_CR, ASCII_LF, \
+    html_open       db "<!DOCTYPE html>", ASCII_CR, ASCII_LF, \
                        "<html lang=", ASCII_QUOTE, "en", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF, \
                        "<head>", ASCII_CR, ASCII_LF, \
                        "    <meta charset=", ASCII_QUOTE, "UTF-8", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF, \
                        "    <meta http-equiv=", ASCII_QUOTE, "X-UA-Compatible", ASCII_QUOTE, " content=", ASCII_QUOTE, "IE=edge", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF, \
                        "    <meta name=", ASCII_QUOTE, "viewport", ASCII_QUOTE, " content=", ASCII_QUOTE, "width=device-width, initial-scale=1.0", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF, \
                        "    <title>"
-    html_body db       "</title>", ASCII_CR, ASCII_LF, \
-                       "<style>", ASCII_CR, ASCII_LF, \
-                       "    .row {", ASCII_CR, ASCII_LF, \
-                       "        white-space: pre;", ASCII_CR, ASCII_LF, \
-                       "        font-family: monospace;", ASCII_CR, ASCII_LF, \
-                       "    }", ASCII_CR, ASCII_LF, \
-                       "</style>", ASCII_CR, ASCII_LF, \
-                       "</head>", ASCII_CR, ASCII_LF, \
-                       "<body>", ASCII_CR, ASCII_LF, \
-                       "    <div class=", ASCII_QUOTE, "code", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF, \
-                       "        <div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
-    html_close db      "</div>", ASCII_CR, ASCII_LF, \
+    html_body       db "</title>", ASCII_CR, ASCII_LF
+                    db "<style>", ASCII_CR, ASCII_LF
+                    db "    body {", ASCII_CR, ASCII_LF
+                    db "        margin: 0;", ASCII_CR, ASCII_LF
+                    db "        height: 100vh;", ASCII_CR, ASCII_LF
+                    db "        background-color: #1e1e1e;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .code {", ASCII_CR, ASCII_LF
+                    db "        max-width: 1000px;", ASCII_CR, ASCII_LF
+                    db "        margin: 0 auto;", ASCII_CR, ASCII_LF
+                    db "        width: 100%;", ASCII_CR, ASCII_LF
+                    db "        height: 100%;", ASCII_CR, ASCII_LF
+                    db "        overflow: auto;", ASCII_CR, ASCII_LF
+                    db "        color: #d4d4d4;", ASCII_CR, ASCII_LF
+                    db "        box-sizing: border-box;", ASCII_CR, ASCII_LF
+                    db "        padding: 32px 16px;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row {", ASCII_CR, ASCII_LF
+                    db "        white-space: pre;", ASCII_CR, ASCII_LF
+                    db "        font-family: monospace;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row .c {", ASCII_CR, ASCII_LF
+                    db "        color: #529955;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row .s, .row .h {", ASCII_CR, ASCII_LF
+                    db "        color: #C3916A;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row .n {", ASCII_CR, ASCII_LF
+                    db "        color: #B5CEA8;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "</style>", ASCII_CR, ASCII_LF
+                    db "</head>", ASCII_CR, ASCII_LF
+                    db "<body>", ASCII_CR, ASCII_LF
+                    db "    <div class=", ASCII_QUOTE, "code", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF
+                    db "        <div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
+    html_close      db "</div>", ASCII_CR, ASCII_LF, \
                        "    </div>", ASCII_CR, ASCII_LF, \
                        "</body>", ASCII_CR, ASCII_LF, \
                        "</html>", ASCII_CR, ASCII_LF
-    html_row db        "</div>", ASCII_CR, ASCII_LF, \
+    html_row        db "</div>", ASCII_CR, ASCII_LF, \
                        "        <div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
+    html_node_open  db "<span class=", ASCII_QUOTE
+    html_node_type  db (?), ASCII_QUOTE, ">"
+    html_node_close db "</span>"
 ; HTML escape constants
     html_escape_lt db "&lt;$"
     html_escape_gt db "&gt;$"
@@ -100,9 +139,8 @@ JUMPS
     html_escape_slash db "&#47;$"
     html_escape_backslash db "&#92;$"
 ; Syntax highlight variables
-    is_comment db FALSE
-    is_string db FALSE
-    is_character db FALSE
+    state_flags db 0
+    should_close db FALSE
 .code
 
 start:
@@ -327,10 +365,55 @@ highlight_buffer PROC near
         mov cx, ax
         lea di, buffer
     highlight_buffer_loop:
+        ; Match comment group
+        cmp byte ptr ds:[di], ';'
+        je highlight_comment_group
+        cmp byte ptr ds:[di], '"'
+        je highlight_string_group
+        cmp byte ptr ds:[di], ASCII_SINGLE_QUOTE
+        je highlight_char_group
+
+        ; Skip numeric reading, if not suitable state
+        mov al, state_flags
+        and al, NUMERIC_MASK
+        cmp al, 0
+        jne highlight_skip_numeric
+
+        ; If decimal, highlight
+        mov al, ds:[di]
+        sub al, '0'
+        cmp al, 9
+        jbe highlight_numeric_group
+
+        ; If numeric group is open, check for additional characters
+        cmp state_flags, NUMERIC_FLAG
+        jne highlight_skip_numeric
+
+        ; Convert character to lower case
+        mov al, ds:[di]
+        or al, 20h
+
+        ; Check, if it is a-f, then skip processing
+        sub al, 'a'
+        cmp al, 'f' - 'a'
+        jbe highlight_buffer_postprocess
+        
+        ; Check, if it is h
+        cmp byte ptr ds:[di], 'h'
+        je highlight_buffer_postprocess
+
+        ; If none of the above, finalize numeric group
+        jmp highlight_numeric_group_end
+
+    ; Skip keyword check
+    highlight_skip_numeric:
+
+    ; Do character postprocessing
+    highlight_buffer_postprocess:
         ; Special character handling
         ;; EOL
         cmp byte ptr ds:[di], ASCII_CR
-        je highlight_new_line
+        je highlight_eol
         cmp byte ptr ds:[di], ASCII_LF
         je highlight_buffer_continue
         ;; Escape characters
@@ -347,7 +430,7 @@ highlight_buffer PROC near
 
         push cx
 
-        ; Copy contents back to file
+        ; Copy contents to output file
         mov ah, SYS_WRITE_FILE
         mov bx, destination_file_handle
         mov dx, di
@@ -355,11 +438,111 @@ highlight_buffer PROC near
         int INT_FUN_DISPATCH
         
         pop cx
+        
+        cmp should_close, TRUE
+        je highlight_group_close
+
     highlight_buffer_continue:
         inc di
         loop highlight_buffer_loop
 
         ret
+
+    ; Group matching
+    highlight_numeric_group:
+        cmp state_flags, NUMERIC_FLAG
+        je highlight_buffer_postprocess
+        
+        mov state_flags, NUMERIC_FLAG
+        mov html_node_type, 'n'
+        jmp highlight_group
+    highlight_numeric_group_end:
+        mov state_flags, 0
+
+        push cx
+
+        mov ah, SYS_WRITE_FILE
+        mov bx, destination_file_handle
+        lea dx, html_node_close
+        mov cx, HTML_NODE_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        pop cx
+
+        jmp highlight_buffer_postprocess
+    highlight_comment_group:
+        cmp state_flags, 0
+        jne highlight_buffer_postprocess
+
+        mov state_flags, COMMENT_FLAG
+        mov html_node_type, 'c'
+        jmp highlight_group
+    highlight_string_group:
+        cmp state_flags, STRING_FLAG
+        je highlight_group_mark_close
+        cmp state_flags, 0
+        jne highlight_buffer_postprocess
+        
+        mov state_flags, STRING_FLAG
+        mov html_node_type, 's'
+        jmp highlight_group
+    highlight_char_group:
+        cmp state_flags, CHAR_FLAG
+        je highlight_group_mark_close
+        cmp state_flags, 0
+        jne highlight_buffer_postprocess
+        
+        mov state_flags, CHAR_FLAG
+        mov html_node_type, 'h'
+    highlight_group:
+        push cx
+
+        lea dx, html_node_open
+        mov bx, destination_file_handle
+        mov cx, HTML_NODE_OPEN_SIZE
+        mov ah, SYS_WRITE_FILE
+        int INT_FUN_DISPATCH
+
+        pop cx
+        jmp highlight_buffer_postprocess  
+    highlight_group_mark_close:
+        mov should_close, TRUE
+        jmp highlight_buffer_postprocess
+    highlight_group_comment_close:
+        push cx
+        
+        mov ah, SYS_WRITE_FILE
+        mov bx, destination_file_handle
+        lea dx, html_node_close
+        mov cx, HTML_NODE_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        pop cx
+
+        mov state_flags, 0
+        jmp highlight_new_line
+    highlight_group_close:
+        mov should_close, FALSE
+        mov state_flags, 0
+
+        push cx
+
+        mov ah, SYS_WRITE_FILE
+        mov bx, destination_file_handle
+        lea dx, html_node_close
+        mov cx, HTML_NODE_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        pop cx
+
+        jmp highlight_buffer_continue
+    
+    highlight_eol:
+        cmp state_flags, COMMENT_FLAG
+        je highlight_group_comment_close
+        jmp highlight_new_line
+        
+    ; Postprocessing
     highlight_new_line:
         push cx
 
@@ -393,6 +576,7 @@ highlight_buffer PROC near
 
         jmp highlight_escape
     highlight_escape:
+        mov ah, SYS_WRITE_FILE
         mov bx, destination_file_handle
         push cx
         call write_string_to_file
