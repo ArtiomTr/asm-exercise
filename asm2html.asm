@@ -57,6 +57,18 @@ HTML_NODE_CLOSE_SIZE equ 7
 TRUE equ 1
 FALSE equ 0
 
+; DOS error codes
+ERROR_INVALID_FUNC equ 01h
+ERROR_FILE_NOT_FOUND equ 02h
+ERROR_PATH_NOT_FOUND equ 03h
+ERROR_TOO_MANY_OPEN_FILES equ 04h
+ERROR_ACCESS_DENIED equ 05h
+ERROR_INVALID_HANDLE equ 06h
+ERROR_MEMORY_BLOCKS_DESTROYED equ 07h
+ERROR_INSUFFICIENT_MEMORY equ 08h
+ERROR_INVALID_BLOCK_ADDRESS equ 09h
+ERROR_INVALID_ENVIRONMENT equ 0Ah
+
 .model small
 .stack 100h
 
@@ -73,7 +85,21 @@ LOCALS @@
     filename_too_long_error db "Filename is too long - maximum allowed length is 8$"
     extension_too_long_error db "Extension is too long - maximum allowed length is 3$"
     invalid_filename_error db "Filename cannot contain dollar sign$"
-    failed_to_open_file db "Failed to open file $"
+    failed_to_open_file db "Failed to open file ", ASCII_QUOTE, '$'
+    failed_to_close_file db "Failed to close file ", ASCII_QUOTE, '$'
+    failed_to_read_file db "Failed to read file ", ASCII_QUOTE, '$'
+    detailed_error_end db ASCII_QUOTE, ". $"
+    err_invalid_func db "Invalid function number$"
+    err_file_not_found db "File not found$"
+    err_path_not_found db "Path not found$"
+    err_too_many_open_files db "Too many open handles (no handles left)$"
+    err_access_denied db "Access denied$"
+    err_invalid_handle db "Invalid handle$"
+    err_memory_block_destroyed db "Memory control blocks destroyed$"
+    err_insufficient_memory db "Insufficient memory$"
+    err_invalid_block_address db "Invalid memory block address$"
+    err_invalid_environment db "Invalid environment"
+    err_unknown db "Unknown error$"
     filename db FILENAME_MAX_LENGTH dup (?), '$'
     extension db EXTENSION_MAX_LENGTH dup (?), '$'
     source_filename db FILENAME_MAX_LENGTH dup (?), ?, EXTENSION_MAX_LENGTH dup (?), '$'
@@ -206,6 +232,14 @@ transform_file:
     
     lea dx, source_filename
     mov ah, SYS_PRINT
+    int INT_FUN_DISPATCH
+    
+    mov dl, ASCII_CR
+    mov ah, SYS_OUT
+    int INT_FUN_DISPATCH
+
+    mov dl, ASCII_LF
+    mov ah, SYS_OUT
     int INT_FUN_DISPATCH
 
     call read_filename
@@ -358,9 +392,9 @@ construct_full_filename PROC near
     construct_full_filename_copy_next:
         ; Check, if extension is already copied        
         cmp ah, 0h
-        mov ah, 1h
         jne construct_full_filename_exit
-
+        mov ah, 1h
+        
         ; If not, copy extension
         lea si, extension
         mov al, '.'
@@ -370,7 +404,7 @@ construct_full_filename PROC near
     ; Finalize filename
     construct_full_filename_exit:
         ; End filename
-        mov al, '$'
+        mov al, 0
         mov ds:[di], al
         
         ; Return
@@ -799,17 +833,35 @@ pick_word_type PROC near
         ret
 pick_word_type ENDP
 
+print_asciiz proc near
+    @@loop:
+        cmp byte ptr ds:[di], 0
+        je @@end
+
+        mov ah, SYS_OUT
+        mov dl, ds:[di]
+        int INT_FUN_DISPATCH
+        
+        inc di
+        
+        jmp @@loop
+    @@end:
+        ret
+print_asciiz endp
+
 create_html PROC near
         push si
         lea di, source_filename
         call construct_full_filename
 
         ; open input file
+        mov cx, 0
+        mov bx, 0
         lea dx, source_filename
         mov al, FILE_READ
         mov ah, SYS_OPEN_FILE
         int INT_FUN_DISPATCH
-        jc create_html_file_open_failure
+        jc @@open_failure
         mov source_file_handle, ax
 
         ; create output file
@@ -832,7 +884,7 @@ create_html PROC near
         mov ah, SYS_CREATE_FILE
         mov cx, 0
         int INT_FUN_DISPATCH
-        jc create_html_file_open_failure
+        jc @@open_failure
         mov destination_file_handle, ax
         
         ;; write header
@@ -850,21 +902,22 @@ create_html PROC near
         lea dx, html_body
         mov cx, HTML_BODY_SIZE
         int INT_FUN_DISPATCH
-    create_html_file_reading_loop:
+    @@read:
         ; Reading from input file
         mov bx, source_file_handle
         lea dx, buffer
         mov cx, BUFFER_SIZE
         mov ah, SYS_READ_FILE
         int INT_FUN_DISPATCH
+        jc @@read_failure
         
         cmp ax, 0
-        je create_html_file_end
+        je @@close
         
         call highlight_buffer
 
-        jmp create_html_file_reading_loop
-    create_html_file_end:
+        jmp @@read
+    @@close:
         ; Write closing tag
         mov ah, SYS_WRITE_FILE
         mov bx, destination_file_handle
@@ -876,27 +929,125 @@ create_html PROC near
         mov bx, source_file_handle
         mov ah, SYS_CLOSE_FILE
         int INT_FUN_DISPATCH
+        jc @@close_failure
 
         mov bx, destination_file_handle
+        mov ah, SYS_CLOSE_FILE
         int INT_FUN_DISPATCH
+        jc @@close_failure
 
         pop si
         ret
-    create_html_file_open_failure:
-        mov cx, dx
-        ; Print error message
-        lea dx, failed_to_open_file
-        mov ah, SYS_PRINT
-        int INT_FUN_DISPATCH
+    @@open_failure:
+        lea cx, failed_to_open_file
+        call print_file_error
+    @@close_failure:
+        lea cx, failed_to_close_file
+        call print_file_error
+    @@read_failure:
+        lea cx, failed_to_read_file
+        call print_file_error
+create_html ENDP
 
+print_file_error proc near
+        ; Save error code
+        push ax
+        ; Save filename
+        mov di, dx
+
+        ; Move error message
         mov dx, cx
         mov ah, SYS_PRINT
         int INT_FUN_DISPATCH
+
+        ; Print filename
+        call print_asciiz
+
+        ; Print error message closing
+        lea dx, detailed_error_end
+        mov ah, SYS_PRINT
+        int INT_FUN_DISPATCH
+
+        ; Get error code
+        pop ax
+        ; Print error to stdout
+        call decode_error
 
         ; Failure exit
         mov al, EXIT_FAILURE
         mov ah, SYS_TERMINATE
         int INT_FUN_DISPATCH
-create_html ENDP
+print_file_error endp
+
+decode_error proc near
+        cmp al, ERROR_INVALID_FUNC
+        je @@invalid_func
+
+        cmp al, ERROR_FILE_NOT_FOUND
+        je @@file_not_found
+
+        cmp al, ERROR_PATH_NOT_FOUND
+        je @@path_not_found
+    
+        cmp al, ERROR_TOO_MANY_OPEN_FILES
+        je @@too_many_open_files
+        
+        cmp al, ERROR_ACCESS_DENIED
+        je @@access_denied
+
+        cmp al, ERROR_INVALID_HANDLE
+        je @@invalid_handle
+
+        cmp al, ERROR_MEMORY_BLOCKS_DESTROYED
+        je @@memory_block_destroyed
+
+        cmp al, ERROR_INSUFFICIENT_MEMORY
+        je @@insufficient_memory
+
+        cmp al, ERROR_INVALID_BLOCK_ADDRESS
+        je @@invalid_block_address
+
+        cmp al, ERROR_INVALID_ENVIRONMENT
+        je @@invalid_environment
+
+
+        jmp @@unknown
+    @@invalid_func:
+        lea dx, err_invalid_func
+        jmp @@print
+    @@file_not_found:
+        lea dx, err_file_not_found
+        jmp @@print
+    @@path_not_found:
+        lea dx, err_path_not_found
+        jmp @@print
+    @@too_many_open_files:
+        lea dx, err_too_many_open_files
+        jmp @@print
+    @@access_denied:
+        lea dx, err_access_denied
+        jmp @@print
+    @@invalid_handle:
+        lea dx, err_invalid_handle
+        jmp @@print
+    @@memory_block_destroyed:
+        lea dx, err_memory_block_destroyed
+        jmp @@print
+    @@insufficient_memory:
+        lea dx, err_insufficient_memory
+        jmp @@print
+    @@invalid_block_address:
+        lea dx, err_invalid_block_address
+        jmp @@print
+    @@invalid_environment:
+        lea dx, err_invalid_environment
+        jmp @@print
+    @@unknown:
+        lea dx, err_unknown
+    @@print:
+        mov ah, SYS_PRINT
+        int INT_FUN_DISPATCH
+        ret
+decode_error endp
 
 end start
