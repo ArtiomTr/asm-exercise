@@ -218,6 +218,7 @@ LOCALS @@
                  db "verr verw "
                  db "wait wbinvd "
                  db "xchg xlat xlatb xor$"
+    exit_code db EXIT_SUCCESS
 .code
 
 start:
@@ -254,8 +255,8 @@ transform_file:
     jne transform_file
 
 ; When program execution ended successfully
-successful_exit:
-    mov al, EXIT_SUCCESS
+program_exit:
+    mov al, exit_code
     mov ah, SYS_TERMINATE
     int INT_FUN_DISPATCH
 
@@ -266,7 +267,7 @@ show_help:
     mov ah, SYS_PRINT
     int INT_FUN_DISPATCH
     
-    jmp successful_exit
+    jmp program_exit
 
 ; Skip all blank characters from command line arguments
 trim_start PROC near
@@ -1016,21 +1017,25 @@ create_html PROC near
         ; Failed to open source file
         lea cx, failed_to_open_file
         call print_file_error
+        mov exit_code, EXIT_FAILURE
         jmp @@destination_cleanup
     @@create_failure:
         ; Failed to create / open destination file
         lea cx, failed_to_create_file
         call print_file_error
+        mov exit_code, EXIT_FAILURE
         jmp @@exit
     @@read_failure:
         ; Failed to read buffer
         lea cx, failed_to_read_file
         call print_file_error
+        mov exit_code, EXIT_FAILURE
         jmp @@cleanup
     @@write_failure:
         ; Failed to write some data
         lea cx, failed_to_write_file
         call print_file_error
+        mov exit_code, EXIT_FAILURE
         jmp @@cleanup
     @@close_failure:
         ; Fatal error - failed to close file.
