@@ -81,8 +81,7 @@ LOCALS @@
             "Usage: asm2html [/?] [...files]", ASCII_CR, ASCII_LF, \
             ASCII_TAB, "/?         - display help", ASCII_CR, ASCII_LF, \
             ASCII_TAB, "[...files] - path to files to display.", ASCII_CR, ASCII_LF, \
-            ASCII_TAB, "             Output will be written into [filename].html files.", ASCII_CR, ASCII_LF, \
-            ASCII_TAB, "             If no files specified, input will be read from stdin.", ASCII_CR, ASCII_LF, '$' 
+            ASCII_TAB, "             Output will be written into [filename].html files.", ASCII_CR, ASCII_LF, '$'
     filename_too_long_error db "Filename is too long - maximum allowed length is 8$"
     extension_too_long_error db "Extension is too long - maximum allowed length is 3$"
     invalid_filename_error db "Filename cannot contain dollar sign$"
