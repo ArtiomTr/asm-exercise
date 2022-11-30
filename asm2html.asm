@@ -47,9 +47,10 @@ WORD_MASK equ 11101111b
 
 ; HTML generation constants
 HTML_OPEN_SIZE equ 217
-HTML_BODY_SIZE equ 777
+HTML_BODY_SIZE equ 1120
 HTML_CLOSE_SIZE equ 38
-HTML_ROW_SIZE equ 33
+HTML_ROW_OPEN_SIZE equ 37
+HTML_ROW_CLOSE_SIZE equ 23
 HTML_NODE_OPEN_SIZE equ 16
 HTML_NODE_CLOSE_SIZE equ 7
 
@@ -134,11 +135,22 @@ LOCALS @@
                     db "        color: #d4d4d4;", ASCII_CR, ASCII_LF
                     db "        box-sizing: border-box;", ASCII_CR, ASCII_LF
                     db "        padding: 32px 16px;", ASCII_CR, ASCII_LF
+                    db "        display: grid;", ASCII_CR, ASCII_LF
+                    db "        column-gap: 16px;", ASCII_CR, ASCII_LF
+                    db "        grid-template-columns: min-content 1fr;", ASCII_CR, ASCII_LF
                     db "    }", ASCII_CR, ASCII_LF
-                    db "    .row {", ASCII_CR, ASCII_LF
+                    db "    .line-no {", ASCII_CR, ASCII_LF
+                    db "        text-align: right;", ASCII_CR, ASCII_LF
+                    db "        user-select: none;", ASCII_CR, ASCII_LF
+                    db "        color: #858585;", ASCII_CR, ASCII_LF
+                    db "        padding-right: 16px;", ASCII_CR, ASCII_LF
+                    db "        border-right: 1px solid #404040;", ASCII_CR, ASCII_LF
+                    db "    }", ASCII_CR, ASCII_LF
+                    db "    .row, .line-no {", ASCII_CR, ASCII_LF
                     db "        white-space: pre;", ASCII_CR, ASCII_LF
                     db "        font-family: monospace;", ASCII_CR, ASCII_LF
-                    db "        min-height: 1em;", ASCII_CR, ASCII_LF
+                    db "        min-height: 1.2em;", ASCII_CR, ASCII_LF
+                    db "        line-height: 1.2;", ASCII_CR, ASCII_LF
                     db "    }", ASCII_CR, ASCII_LF
                     db "    .row .c {", ASCII_CR, ASCII_LF
                     db "        color: #529955;", ASCII_CR, ASCII_LF
@@ -159,13 +171,14 @@ LOCALS @@
                     db "</head>", ASCII_CR, ASCII_LF
                     db "<body>", ASCII_CR, ASCII_LF
                     db "    <div class=", ASCII_QUOTE, "code", ASCII_QUOTE, ">", ASCII_CR, ASCII_LF
-                    db "        <div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
+                    db "        <div class=", ASCII_QUOTE, "line-no", ASCII_QUOTE, ">1</div><div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
     html_close      db "</div>", ASCII_CR, ASCII_LF, \
                        "    </div>", ASCII_CR, ASCII_LF, \
                        "</body>", ASCII_CR, ASCII_LF, \
                        "</html>", ASCII_CR, ASCII_LF
-    html_row        db "</div>", ASCII_CR, ASCII_LF, \
-                       "        <div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
+    html_row_open   db "</div>", ASCII_CR, ASCII_LF, \
+                       "        <div class=", ASCII_QUOTE, "line-no", ASCII_QUOTE, ">"
+    html_row_close  db "</div><div class=", ASCII_QUOTE, "row", ASCII_QUOTE, ">"
     html_node_open  db "<span class=", ASCII_QUOTE
     html_node_type  db (?), ASCII_QUOTE, ">"
     html_node_close db "</span>"
@@ -178,6 +191,9 @@ LOCALS @@
 ; Syntax highlighter state
     state_flags db ?
     should_close db ?
+    line_number dw ?
+    line_number_str db 6 dup (?)
+    line_number_temp db 6 dup (?)
     identifier db IDENTIFIER_BUFFER_SIZE dup (?), 0
 ; Syntax highlight configuration
     keywords db "db dw equ byte word ptr near$"
@@ -417,6 +433,48 @@ write_string_to_file PROC near
         ret
 
 write_string_to_file ENDP
+
+print_line_no PROC near
+
+        ; Construct line number string
+        mov ax, line_number
+        mov bx, 10
+        push di
+        push si
+        mov dx, 0
+        lea di, line_number_str
+        mov cl, 0
+    @@loop:
+        div bx
+        mov ds:[di], dl
+        mov dx, 0
+        inc cl
+        inc di
+
+        cmp ax, 0
+        jne @@loop
+        dec di
+        lea si, line_number_temp
+    @@print:
+        mov ax, ds:[di]
+        add ax, '0'
+        mov ds:[si], ax
+        dec cl
+        dec di
+        inc si
+        cmp cl, 0
+        jne @@print
+        
+        mov byte ptr ds:[si], 0
+        lea dx, line_number_temp
+        mov bx, destination_file_handle
+        call write_string_to_file
+
+        pop si
+        pop di
+        ret
+
+print_line_no ENDP
 
 highlight_buffer PROC near
         mov cx, ax
@@ -667,9 +725,19 @@ highlight_buffer PROC near
 
         mov bx, destination_file_handle
         mov ah, SYS_WRITE_FILE
-        lea dx, html_row
-        mov cx, HTML_ROW_SIZE
+        lea dx, html_row_open
+        mov cx, HTML_ROW_OPEN_SIZE
         int INT_FUN_DISPATCH
+
+        call print_line_no
+
+        mov bx, destination_file_handle
+        mov ah, SYS_WRITE_FILE
+        lea dx, html_row_close
+        mov cx, HTML_ROW_CLOSE_SIZE
+        int INT_FUN_DISPATCH
+
+        inc line_number
 
         pop cx
 
@@ -695,7 +763,6 @@ highlight_buffer PROC near
 
         jmp @@escape
     @@escape:
-        mov ah, SYS_WRITE_FILE
         mov bx, destination_file_handle
         push cx
         call write_string_to_file
@@ -902,6 +969,7 @@ create_html PROC near
         ; Reset highlighter state
         mov state_flags, 0
         mov should_close, FALSE
+        mov line_number, 2
     @@read:
         ; Reading from input file
         mov bx, source_file_handle
