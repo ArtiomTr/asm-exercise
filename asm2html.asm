@@ -109,7 +109,6 @@ LOCALS @@
     destination_file_handle dw ?
     source_file_handle dw ?
     buffer db BUFFER_SIZE dup (?), '$'
-    identifier db IDENTIFIER_BUFFER_SIZE dup (?), 0
 
 ; HTML generation template
     html_open       db "<!DOCTYPE html>", ASCII_CR, ASCII_LF, \
@@ -176,9 +175,11 @@ LOCALS @@
     html_escape_quot db "&quot;", 0
     html_escape_slash db "&#47;", 0
     html_escape_backslash db "&#92;", 0
-; Syntax highlight variables
-    state_flags db 0
-    should_close db FALSE
+; Syntax highlighter state
+    state_flags db ?
+    should_close db ?
+    identifier db IDENTIFIER_BUFFER_SIZE dup (?), 0
+; Syntax highlight configuration
     keywords db "db dw equ byte word ptr near$"
     instructions db "aaa aad aam aas adc add and arpl "
                  db "bound bsf bsr bswap bt btc btr bts "
@@ -897,6 +898,10 @@ create_html PROC near
         lea dx, html_body
         mov cx, HTML_BODY_SIZE
         int INT_FUN_DISPATCH
+
+        ; Reset highlighter state
+        mov state_flags, 0
+        mov should_close, FALSE
     @@read:
         ; Reading from input file
         mov bx, source_file_handle
