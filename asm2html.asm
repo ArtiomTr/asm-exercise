@@ -86,8 +86,10 @@ LOCALS @@
     extension_too_long_error db "Extension is too long - maximum allowed length is 3$"
     invalid_filename_error db "Filename cannot contain dollar sign$"
     failed_to_open_file db "Failed to open file ", ASCII_QUOTE, '$'
+    failed_to_create_file db "Failed to create file ", ASCII_QUOTE, '$'
     failed_to_close_file db "Failed to close file ", ASCII_QUOTE, '$'
     failed_to_read_file db "Failed to read file ", ASCII_QUOTE, '$'
+    failed_to_write_file db "Failed to write file ", ASCII_QUOTE, '$'
     detailed_error_end db ASCII_QUOTE, ". $"
     err_invalid_func db "Invalid function number$"
     err_file_not_found db "File not found$"
@@ -107,7 +109,7 @@ LOCALS @@
     destination_file_handle dw ?
     source_file_handle dw ?
     buffer db BUFFER_SIZE dup (?), '$'
-    identifier db IDENTIFIER_BUFFER_SIZE dup (?), '$'
+    identifier db IDENTIFIER_BUFFER_SIZE dup (?), 0
 
 ; HTML generation template
     html_open       db "<!DOCTYPE html>", ASCII_CR, ASCII_LF, \
@@ -169,11 +171,11 @@ LOCALS @@
     html_node_type  db (?), ASCII_QUOTE, ">"
     html_node_close db "</span>"
 ; HTML escape constants
-    html_escape_lt db "&lt;$"
-    html_escape_gt db "&gt;$"
-    html_escape_quot db "&quot;$"
-    html_escape_slash db "&#47;$"
-    html_escape_backslash db "&#92;$"
+    html_escape_lt db "&lt;", 0
+    html_escape_gt db "&gt;", 0
+    html_escape_quot db "&quot;", 0
+    html_escape_slash db "&#47;", 0
+    html_escape_backslash db "&#92;", 0
 ; Syntax highlight variables
     state_flags db 0
     should_close db FALSE
@@ -229,18 +231,6 @@ start:
     je show_help
 transform_file:
     call create_html
-    
-    lea dx, source_filename
-    mov ah, SYS_PRINT
-    int INT_FUN_DISPATCH
-    
-    mov dl, ASCII_CR
-    mov ah, SYS_OUT
-    int INT_FUN_DISPATCH
-
-    mov dl, ASCII_LF
-    mov ah, SYS_OUT
-    int INT_FUN_DISPATCH
 
     call read_filename
     cmp ds:[filename], '$'
@@ -415,7 +405,7 @@ write_string_to_file PROC near
         mov si, dx
         mov cx, 0
     write_string_to_file_loop:    
-        cmp byte ptr ds:[si], '$'
+        cmp byte ptr ds:[si], 0
         je write_string_to_file_dump
         inc cx
         inc si
@@ -430,30 +420,30 @@ write_string_to_file ENDP
 highlight_buffer PROC near
         mov cx, ax
         lea di, buffer
-    highlight_buffer_loop:
+    @@next_char:
         ; Match comment group
         cmp byte ptr ds:[di], ';'
-        je highlight_comment_group
+        je @@comment
         cmp byte ptr ds:[di], '"'
-        je highlight_string_group
+        je @@string
         cmp byte ptr ds:[di], ASCII_SINGLE_QUOTE
-        je highlight_char_group
+        je @@char
 
         ; Skip numeric reading, if not suitable state
         mov al, state_flags
         and al, NUMERIC_MASK
         cmp al, 0
-        jne highlight_skip_numeric
+        jne @@skip_numeric
 
         ; If decimal, highlight
         mov al, ds:[di]
         sub al, '0'
         cmp al, 9
-        jbe highlight_numeric_group
+        jbe @@numeric
 
         ; If numeric group is open, check for additional characters
         cmp state_flags, NUMERIC_FLAG
-        jne highlight_skip_numeric
+        jne @@skip_numeric
 
         ; Convert character to lower case
         mov al, ds:[di]
@@ -462,67 +452,67 @@ highlight_buffer PROC near
         ; Check, if it is a-f, then treat as numeric
         sub al, 'a'
         cmp al, 'f' - 'a'
-        jbe highlight_buffer_postprocess
+        jbe @@postprocess
         
         ; Check, if it is h
         cmp byte ptr ds:[di], 'h'
-        je highlight_buffer_postprocess
+        je @@postprocess
 
         ; If none of the above, finalize numeric group
-        jmp highlight_numeric_group_end
+        jmp @@numeric_end
 
     ; Skip keyword check
-    highlight_skip_numeric:
+    @@skip_numeric:
 
         mov al, state_flags
         and al, WORD_MASK
         cmp al, 0
-        jne highlight_buffer_postprocess
+        jne @@postprocess
 
         cmp byte ptr ds:[di], '.'
-        je highlight_word_group
+        je @@wordgroup
 
         mov al, ds:[di]
         or al, 20h
         sub al, 'a'
         cmp al, 'z' - 'a'
-        jbe highlight_word_group
+        jbe @@wordgroup
 
         cmp byte ptr ds:[di], '_'
-        je highlight_word_group
+        je @@wordgroup
         
         cmp state_flags, WORD_FLAG
-        jne highlight_buffer_postprocess
+        jne @@postprocess
 
         mov al, ds:[di]
         sub al, '0'
         cmp al, 9
-        jbe highlight_word_group
+        jbe @@wordgroup
 
         cmp byte ptr ds:[di], ':'
-        je highlight_word_group
+        je @@wordgroup
 
-        jmp highlight_word_group_end   
+        jmp @@wordgroup_end   
 
     ; Do character postprocessing
-    highlight_buffer_postprocess:
+    @@postprocess:
         ; Special character handling
         ;; EOL
         cmp byte ptr ds:[di], ASCII_CR
-        je highlight_eol
+        je @@eol
         cmp byte ptr ds:[di], ASCII_LF
-        je highlight_buffer_continue
+        je @@continue
         ;; Escape characters
         cmp byte ptr ds:[di], '<'
-        je highlight_escape_lt
+        je @@escape_lt
         cmp byte ptr ds:[di], '>'
-        je highlight_escape_gt
+        je @@escape_gt
         cmp byte ptr ds:[di], '"'
-        je highlight_escape_quot
+        je @@escape_quot
         cmp byte ptr ds:[di], '/'
-        je highlight_escape_slash
+        je @@escape_slash
         cmp byte ptr ds:[di], ASCII_BACKSLASH
-        je highlight_escape_backslash
+        je @@escape_backslash
 
         push cx
 
@@ -536,39 +526,39 @@ highlight_buffer PROC near
         pop cx
         
         cmp should_close, TRUE
-        je highlight_group_close
+        je @@close_group
 
-    highlight_buffer_continue:
+    @@continue:
         inc di
-        loop highlight_buffer_loop
+        loop @@next_char
 
         ret
 
     ; Group matching
-    highlight_word_group:
+    @@wordgroup:
         cmp state_flags, WORD_FLAG
-        je highlight_word_group_begin_skip
+        je @@wordgroup_skip_begin
         lea si, identifier
-    highlight_word_group_begin_skip:
+    @@wordgroup_skip_begin:
         mov al, ds:[di]
         mov ds:[si], al
         inc si
         mov state_flags, WORD_FLAG
-        jmp highlight_buffer_continue
-    highlight_word_group_end:
-        mov byte ptr ds:[si], '$'
+        jmp @@continue
+    @@wordgroup_end:
+        mov byte ptr ds:[si], 0
         call pick_word_type
 
         mov state_flags, 0
-        jmp highlight_buffer_postprocess
-    highlight_numeric_group:
+        jmp @@postprocess
+    @@numeric:
         cmp state_flags, NUMERIC_FLAG
-        je highlight_buffer_postprocess
+        je @@postprocess
         
         mov state_flags, NUMERIC_FLAG
         mov html_node_type, 'n'
-        jmp highlight_group
-    highlight_numeric_group_end:
+        jmp @@group
+    @@numeric_end:
         mov state_flags, 0
 
         push cx
@@ -581,32 +571,32 @@ highlight_buffer PROC near
 
         pop cx
 
-        jmp highlight_buffer_postprocess
-    highlight_comment_group:
+        jmp @@postprocess
+    @@comment:
         cmp state_flags, 0
-        jne highlight_buffer_postprocess
+        jne @@postprocess
 
         mov state_flags, COMMENT_FLAG
         mov html_node_type, 'c'
-        jmp highlight_group
-    highlight_string_group:
+        jmp @@group
+    @@string:
         cmp state_flags, STRING_FLAG
-        je highlight_group_mark_close
+        je @@close_mark_group
         cmp state_flags, 0
-        jne highlight_buffer_postprocess
+        jne @@postprocess
         
         mov state_flags, STRING_FLAG
         mov html_node_type, 's'
-        jmp highlight_group
-    highlight_char_group:
+        jmp @@group
+    @@char:
         cmp state_flags, CHAR_FLAG
-        je highlight_group_mark_close
+        je @@close_mark_group
         cmp state_flags, 0
-        jne highlight_buffer_postprocess
+        jne @@postprocess
         
         mov state_flags, CHAR_FLAG
         mov html_node_type, 'h'
-    highlight_group:
+    @@group:
         push cx
 
         lea dx, html_node_open
@@ -616,11 +606,11 @@ highlight_buffer PROC near
         int INT_FUN_DISPATCH
 
         pop cx
-        jmp highlight_buffer_postprocess  
-    highlight_group_mark_close:
+        jmp @@postprocess  
+    @@close_mark_group:
         mov should_close, TRUE
-        jmp highlight_buffer_postprocess
-    highlight_group_comment_close:
+        jmp @@postprocess
+    @@close_comment:
         push cx
         
         mov ah, SYS_WRITE_FILE
@@ -632,8 +622,8 @@ highlight_buffer PROC near
         pop cx
 
         mov state_flags, 0
-        jmp highlight_new_line
-    highlight_group_close:
+        jmp @@new_line
+    @@close_group:
         mov should_close, FALSE
         mov state_flags, 0
 
@@ -647,11 +637,11 @@ highlight_buffer PROC near
 
         pop cx
 
-        jmp highlight_buffer_continue
+        jmp @@continue
     
-    highlight_eol:
+    @@eol:
         cmp should_close, TRUE
-        jne highlight_eol_skip
+        jne @@eol_skip
 
         mov should_close, FALSE
         mov state_flags, 0
@@ -665,13 +655,13 @@ highlight_buffer PROC near
         int INT_FUN_DISPATCH
 
         pop cx
-    highlight_eol_skip:    
+    @@eol_skip:    
         cmp state_flags, COMMENT_FLAG
-        je highlight_group_comment_close
-        jmp highlight_new_line
+        je @@close_comment
+        jmp @@new_line
         
     ; Postprocessing
-    highlight_new_line:
+    @@new_line:
         push cx
 
         mov bx, destination_file_handle
@@ -682,34 +672,34 @@ highlight_buffer PROC near
 
         pop cx
 
-        jmp highlight_buffer_continue
-    highlight_escape_lt:
+        jmp @@continue
+    @@escape_lt:
         lea dx, html_escape_lt
 
-        jmp highlight_escape
-    highlight_escape_gt:
+        jmp @@escape
+    @@escape_gt:
         lea dx, html_escape_gt
 
-        jmp highlight_escape
-    highlight_escape_quot:
+        jmp @@escape
+    @@escape_quot:
         lea dx, html_escape_quot
 
-        jmp highlight_escape
-    highlight_escape_slash:
+        jmp @@escape
+    @@escape_slash:
         lea dx, html_escape_slash
 
-        jmp highlight_escape
-    highlight_escape_backslash:
+        jmp @@escape
+    @@escape_backslash:
         lea dx, html_escape_backslash
 
-        jmp highlight_escape
-    highlight_escape:
+        jmp @@escape
+    @@escape:
         mov ah, SYS_WRITE_FILE
         mov bx, destination_file_handle
         push cx
         call write_string_to_file
         pop cx
-        jmp highlight_buffer_continue
+        jmp @@continue
 highlight_buffer ENDP
 
 match_keyword PROC near
@@ -731,7 +721,7 @@ match_keyword PROC near
         mov ah, ds:[si]
 
         ; Check if identifier ended
-        cmp ah, '$'
+        cmp ah, 0
         je @@identifier_end
 
         ; Convert to lowercase
@@ -757,7 +747,7 @@ match_keyword PROC near
         jmp @@continue
     @@keyword_end:
         ; If identifier end not reached, skip check
-        cmp byte ptr ds:[si], '$'
+        cmp byte ptr ds:[si], 0
         jne @@keyword_skip
 
         ; If identifier is equal to keyword, exit
@@ -772,7 +762,7 @@ match_keyword PROC near
         mov al, TRUE
         jmp @@start
     @@last_keyword:
-        cmp byte ptr ds:[si], '$'
+        cmp byte ptr ds:[si], 0
         je @@exit
         mov al, FALSE
     @@exit:
@@ -833,6 +823,11 @@ pick_word_type PROC near
         ret
 pick_word_type ENDP
 
+; Function for printing C-style (terminated by null character '\0') string to stdout
+; Arguments:
+;   di - pointer in "ds" to the beginning of string
+; Mutates:
+;   di, ah
 print_asciiz proc near
     @@loop:
         cmp byte ptr ds:[di], 0
@@ -843,7 +838,7 @@ print_asciiz proc near
         int INT_FUN_DISPATCH
         
         inc di
-        
+
         jmp @@loop
     @@end:
         ret
@@ -924,29 +919,50 @@ create_html PROC near
         lea dx, html_close
         mov cx, HTML_CLOSE_SIZE
         int INT_FUN_DISPATCH
-
+    @@cleanup:
         ; Close files
         mov bx, source_file_handle
         mov ah, SYS_CLOSE_FILE
         int INT_FUN_DISPATCH
         jc @@close_failure
-
+    @@destination_cleanup:
         mov bx, destination_file_handle
         mov ah, SYS_CLOSE_FILE
         int INT_FUN_DISPATCH
         jc @@close_failure
-
+    @@exit:
         pop si
         ret
     @@open_failure:
+        ; Failed to open source file
         lea cx, failed_to_open_file
         call print_file_error
-    @@close_failure:
-        lea cx, failed_to_close_file
+        jmp @@destination_cleanup
+    @@create_failure:
+        ; Failed to create / open destination file
+        lea cx, failed_to_create_file
         call print_file_error
+        jmp @@exit
     @@read_failure:
+        ; Failed to read buffer
         lea cx, failed_to_read_file
         call print_file_error
+        jmp @@cleanup
+    @@write_failure:
+        ; Failed to write some data
+        lea cx, failed_to_write_file
+        call print_file_error
+        jmp @@cleanup
+    @@close_failure:
+        ; Fatal error - failed to close file.
+        ; Terminating program immediately.
+        lea cx, failed_to_close_file
+        call print_file_error
+
+        ; Terminating with non-zero exit code
+        mov al, EXIT_FAILURE
+        mov ah, SYS_TERMINATE
+        int INT_FUN_DISPATCH
 create_html ENDP
 
 print_file_error proc near
@@ -973,10 +989,7 @@ print_file_error proc near
         ; Print error to stdout
         call decode_error
 
-        ; Failure exit
-        mov al, EXIT_FAILURE
-        mov ah, SYS_TERMINATE
-        int INT_FUN_DISPATCH
+        ret
 print_file_error endp
 
 decode_error proc near
