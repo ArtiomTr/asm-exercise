@@ -187,6 +187,7 @@ LOCALS @@
     html_escape_quot db "&quot;", 0
     html_escape_slash db "&#47;", 0
     html_escape_backslash db "&#92;", 0
+    html_escape_amp db "&amp;", 0
 ; Syntax highlighter state
     state_flags db ?
     should_close db ?
@@ -571,6 +572,8 @@ highlight_buffer PROC near
         je @@escape_slash
         cmp byte ptr ds:[di], ASCII_BACKSLASH
         je @@escape_backslash
+        cmp byte ptr ds:[di], '&'
+        je @@escape_amp
 
         push cx
 
@@ -743,6 +746,10 @@ highlight_buffer PROC near
         jmp @@continue
     @@escape_lt:
         lea dx, html_escape_lt
+
+        jmp @@escape
+    @@escape_amp:
+        lea dx, html_escape_amp
 
         jmp @@escape
     @@escape_gt:
