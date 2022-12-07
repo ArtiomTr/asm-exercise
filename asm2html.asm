@@ -33,7 +33,7 @@ FILE_READ equ 0h
 CL_ARGUMENTS_START equ 81h
 FILENAME_MAX_LENGTH equ 8
 EXTENSION_MAX_LENGTH equ 3
-BUFFER_SIZE equ 20
+BUFFER_SIZE equ 2000
 IDENTIFIER_BUFFER_SIZE equ 1024
 
 ; Flags
@@ -217,7 +217,8 @@ LOCALS @@
                  db "test "
                  db "verr verw "
                  db "wait wbinvd "
-                 db "xchg xlat xlatb xor$"
+                 db "xchg xlat xlatb xor"
+                 db "$"
     exit_code db EXIT_SUCCESS
 .code
 
