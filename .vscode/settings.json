@@ -1,0 +1,7 @@
+{
+    "[xml]": {
+        "editor.autoClosingBrackets": "never",
+        "files.trimFinalNewlines": true,
+        "editor.defaultFormatter": "redhat.vscode-xml"
+    }
+}

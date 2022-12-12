@@ -1,4 +1,6 @@
 *.OBJ
 *.EXE
+*.COM
 *.MAP
 *.HTM
+HelpPC.chm

@@ -1,0 +1,550 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<disasm>
+    <rules>
+        <parsing>
+            <match value=" " />
+        </parsing>
+    </rules>
+    <instructions>
+        <instruction>
+            <tag>0000 00dw mod reg r/m [poslinkis]</tag>
+            <name>ADD</name>
+        </instruction>
+        <instruction>
+            <tag>0000 010w bojb [bovb]</tag>
+            <name>ADD</name>
+        </instruction>
+        <instruction>
+            <tag>000sr 110</tag>
+            <name>PUSH</name>
+        </instruction>
+        <instruction>
+            <tag>000sr 111</tag>
+            <name>POP</name>
+        </instruction>
+        <instruction>
+            <tag>0000 10dw mod reg r/m [poslinkis]</tag>
+            <name>OR</name>
+        </instruction>
+        <instruction>
+            <tag>0000 110w bojb [bovb]</tag>
+            <name>OR</name>
+        </instruction>
+        <instruction>
+            <tag>0001 00dw mod reg r/m [poslinkis]</tag>
+            <name>ADC</name>
+        </instruction>
+        <instruction>
+            <tag>0001 010w bojb [bovb]</tag>
+            <name>ADC</name>
+        </instruction>
+        <instruction>
+            <tag>0001 10dw mod reg r/m [poslinkis]</tag>
+            <name>SBB</name>
+        </instruction>
+        <instruction>
+            <tag>0001 110w bojb [bovb]</tag>
+            <name>SBB</name>
+        </instruction>
+        <instruction>
+            <tag>0010 00dw mod reg r/m [poslinkis]</tag>
+            <name>AND</name>
+        </instruction>
+        <instruction>
+            <tag>0010 010w bojb [bovb]</tag>
+            <name>AND</name>
+        </instruction>
+        <instruction>
+            <tag>001sr 110</tag>
+            <name>segmento</name>
+        </instruction>
+        <instruction>
+            <tag>0010 0111</tag>
+            <name>DAA</name>
+        </instruction>
+        <instruction>
+            <tag>0010 10dw mod reg r/m [poslinkis]</tag>
+            <name>SUB</name>
+        </instruction>
+        <instruction>
+            <tag>0010 110w bojb [bovb]</tag>
+            <name>SUB</name>
+        </instruction>
+        <instruction>
+            <tag>0010 1111</tag>
+            <name>DAS</name>
+        </instruction>
+        <instruction>
+            <tag>0011 00dw mod reg r/m [poslinkis]</tag>
+            <name>XOR</name>
+        </instruction>
+        <instruction>
+            <tag>0011 010w bojb [bovb]</tag>
+            <name>XOR</name>
+        </instruction>
+        <instruction>
+            <tag>0011 0111</tag>
+            <name>AAA</name>
+        </instruction>
+        <instruction>
+            <tag>0011 10dw mod reg r/m [poslinkis]</tag>
+            <name>CMP</name>
+        </instruction>
+        <instruction>
+            <tag>0011 110w bojb [bovb]</tag>
+            <name>CMP</name>
+        </instruction>
+        <instruction>
+            <tag>0011 1111</tag>
+            <name>AAS</name>
+        </instruction>
+        <instruction>
+            <tag>0100 0reg</tag>
+            <name>INC</name>
+        </instruction>
+        <instruction>
+            <tag>0100 1reg</tag>
+            <name>DEC</name>
+        </instruction>
+        <instruction>
+            <tag>0101 0reg</tag>
+            <name>PUSH</name>
+        </instruction>
+        <instruction>
+            <tag>0101 1reg</tag>
+            <name>POP</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0000 poslinkis</tag>
+            <name>JO</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0001 poslinkis</tag>
+            <name>JNO</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0010 poslinkis</tag>
+            <name>JNAE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0011 poslinkis</tag>
+            <name>JAE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0100 poslinkis</tag>
+            <name>JE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0101 poslinkis</tag>
+            <name>JNE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0110 poslinkis</tag>
+            <name>JBE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 0111 poslinkis</tag>
+            <name>JA</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1000 poslinkis</tag>
+            <name>JS</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1001 poslinkis</tag>
+            <name>JNS</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1010 poslinkis</tag>
+            <name>JP</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1011 poslinkis</tag>
+            <name>JNP</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1100 poslinkis</tag>
+            <name>JL</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1101 poslinkis</tag>
+            <name>JGE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1110 poslinkis</tag>
+            <name>JLE</name>
+        </instruction>
+        <instruction>
+            <tag>0111 1111 poslinkis</tag>
+            <name>JG</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 000 r/m [poslinkis] bojb [bovb]</tag>
+            <name>ADD</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 001 r/m [poslinkis] bojb [bovb]</tag>
+            <name>OR</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 010 r/m [poslinkis] bojb [bovb]</tag>
+            <name>ADC</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 011 r/m [poslinkis] bojb [bovb]</tag>
+            <name>SBB</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 100 r/m [poslinkis] bojb [bovb]</tag>
+            <name>AND</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 101 r/m [poslinkis] bojb [bovb]</tag>
+            <name>SUB</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 110 r/m [poslinkis] bojb [bovb]</tag>
+            <name>XOR</name>
+        </instruction>
+        <instruction>
+            <tag>1000 00sw mod 111 r/m [poslinkis] bojb [bovb]</tag>
+            <name>CMP</name>
+        </instruction>
+        <instruction>
+            <tag>1000 010w mod reg r/m [poslinkis]</tag>
+            <name>TEST</name>
+        </instruction>
+        <instruction>
+            <tag>1000 011w mod reg r/m [poslinkis]</tag>
+            <name>XCHG</name>
+        </instruction>
+        <instruction>
+            <tag>1000 10dw mod reg r/m [poslinkis]</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1000 11d0 mod 0sr r/m [poslinkis]</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1000 1101 mod reg r/m [poslinkis]</tag>
+            <name>LEA</name>
+        </instruction>
+        <instruction>
+            <tag>1000 1111 mod 110 r/m [poslinkis]</tag>
+            <name>POP</name>
+        </instruction>
+        <instruction>
+            <tag>1001 0000</tag>
+            <name>NOP</name>
+        </instruction>
+        <instruction>
+            <tag>1001 0reg</tag>
+            <name>XCHG</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1000</tag>
+            <name>CBW</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1001</tag>
+            <name>CWD</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1010 ajb avb srjb srvb</tag>
+            <name>CALL</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1011</tag>
+            <name>WAIT</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1100</tag>
+            <name>PUSHF</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1101</tag>
+            <name>POPF</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1110</tag>
+            <name>SAHF</name>
+        </instruction>
+        <instruction>
+            <tag>1001 1111</tag>
+            <name>LAHF</name>
+        </instruction>
+        <instruction>
+            <tag>1010 000w adrjb adrvb</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1010 001w adrjb adrvb</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1010 010w</tag>
+            <name>MOVSB</name>
+        </instruction>
+        <instruction>
+            <tag>1010 011w</tag>
+            <name>CMPSB</name>
+        </instruction>
+        <instruction>
+            <tag>1010 100w bojb [bovb]</tag>
+            <name>TEST</name>
+        </instruction>
+        <instruction>
+            <tag>1010 101w</tag>
+            <name>STOSB</name>
+        </instruction>
+        <instruction>
+            <tag>1010 110w</tag>
+            <name>LODSB</name>
+        </instruction>
+        <instruction>
+            <tag>1010 111w</tag>
+            <name>SCASB</name>
+        </instruction>
+        <instruction>
+            <tag>1011 wreg bojb [bovb]</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1100 0010 bojb bovb</tag>
+            <name>RET</name>
+        </instruction>
+        <instruction>
+            <tag>1100 0011</tag>
+            <name>RET</name>
+        </instruction>
+        <instruction>
+            <tag>1100 0100 mod reg r/m [poslinkis]</tag>
+            <name>LES</name>
+        </instruction>
+        <instruction>
+            <tag>1100 0101 mod reg r/m [poslinkis]</tag>
+            <name>LDS</name>
+        </instruction>
+        <instruction>
+            <tag>1100 011w mod 000 r/m [poslinkis] bojb [bovb]</tag>
+            <name>MOV</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1010 bojb bovb</tag>
+            <name>RETF</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1011</tag>
+            <name>RETF</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1100</tag>
+            <name>INT</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1101 numeris</tag>
+            <name>INT</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1110</tag>
+            <name>INTO</name>
+        </instruction>
+        <instruction>
+            <tag>1100 1111</tag>
+            <name>IRET</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 000 r/m [poslinkis]</tag>
+            <name>ROL</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 001 r/m [poslinkis]</tag>
+            <name>ROR</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 010 r/m [poslinkis]</tag>
+            <name>RCL</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 011 r/m [poslinkis]</tag>
+            <name>RCR</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 100 r/m [poslinkis]</tag>
+            <name>SHL</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 101 r/m [poslinkis]</tag>
+            <name>SHR</name>
+        </instruction>
+        <instruction>
+            <tag>1101 00vw mod 111 r/m [poslinkis]</tag>
+            <name>SAR</name>
+        </instruction>
+        <instruction>
+            <tag>1101 0100 0000 1010</tag>
+            <name>AAM</name>
+        </instruction>
+        <instruction>
+            <tag>1101 0101 0000 1010</tag>
+            <name>AAD</name>
+        </instruction>
+        <instruction>
+            <tag>1101 0111</tag>
+            <name>XLAT</name>
+        </instruction>
+        <instruction>
+            <tag>1101 1xxx mod yyy r/m [poslinkis]</tag>
+            <name>ESC</name>
+        </instruction>
+        <instruction>
+            <tag>1110 0000 poslinkis</tag>
+            <name>LOOPNE</name>
+        </instruction>
+        <instruction>
+            <tag>1110 0001 poslinkis</tag>
+            <name>LOOPE</name>
+        </instruction>
+        <instruction>
+            <tag>1110 0010 poslinkis</tag>
+            <name>LOOP</name>
+        </instruction>
+        <instruction>
+            <tag>1110 0011 poslinkis</tag>
+            <name>JCXZ</name>
+        </instruction>
+        <instruction>
+            <tag>1110 010w portas</tag>
+            <name>IN</name>
+        </instruction>
+        <instruction>
+            <tag>1110 011w portas</tag>
+            <name>OUT</name>
+        </instruction>
+        <instruction>
+            <tag>1110 1000 ajb avb</tag>
+            <name>CALL</name>
+        </instruction>
+        <instruction>
+            <tag>1110 1001 pjb pvb</tag>
+            <name>JMP</name>
+        </instruction>
+        <instruction>
+            <tag>1110 1010 ajb avb srjb srvb</tag>
+            <name>JMP</name>
+        </instruction>
+        <instruction>
+            <tag>1110 1011 poslinkis</tag>
+            <name>JMP</name>
+        </instruction>
+        <instruction>
+            <tag>1110 110w</tag>
+            <name>IN</name>
+        </instruction>
+        <instruction>
+            <tag>1110 111w</tag>
+            <name>OUT</name>
+        </instruction>
+        <instruction>
+            <tag>1111 0000</tag>
+            <name>LOCK</name>
+        </instruction>
+        <instruction>
+            <tag>1111 0010</tag>
+            <name>REPNZ</name>
+        </instruction>
+        <instruction>
+            <tag>1111 0011</tag>
+            <name>REP</name>
+        </instruction>
+        <instruction>
+            <tag>1111 0100</tag>
+            <name>HLT</name>
+        </instruction>
+        <instruction>
+            <tag>1111 0101</tag>
+            <name>CMC</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 000 r/m [poslinkis] bojb [bovb]</tag>
+            <name>TEST</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 010 r/m [poslinkis]</tag>
+            <name>NOT</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 011 r/m [poslinkis]</tag>
+            <name>NEG</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 100 r/m [poslinkis]</tag>
+            <name>MUL</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 101 r/m [poslinkis]</tag>
+            <name>IMUL</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 110 r/m [poslinkis]</tag>
+            <name>DIV</name>
+        </instruction>
+        <instruction>
+            <tag>1111 011w mod 111 r/m [poslinkis]</tag>
+            <name>IDIV</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1000</tag>
+            <name>CLC</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1001</tag>
+            <name>STC</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1010</tag>
+            <name>CLI</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1011</tag>
+            <name>STI</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1100</tag>
+            <name>CLD</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1101</tag>
+            <name>STD</name>
+        </instruction>
+        <instruction>
+            <tag>1111 111w mod 000 r/m [poslinkis]</tag>
+            <name>INC</name>
+        </instruction>
+        <instruction>
+            <tag>1111 111w mod 001 r/m [poslinkis]</tag>
+            <name>DEC</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1111 mod 010 r/m [poslinkis]</tag>
+            <name>CALL</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1111 mod 011 r/m [poslinkis]</tag>
+            <name>CALL</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1111 mod 100 r/m [poslinkis]</tag>
+            <name>JMP</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1111 mod 101 r/m [poslinkis]</tag>
+            <name>JMP</name>
+        </instruction>
+        <instruction>
+            <tag>1111 1111 mod 110 r/m [poslinkis]</tag>
+            <name>PUSH</name>
+        </instruction>
+    </instructions>
+</disasm>
