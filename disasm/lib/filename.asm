@@ -19,20 +19,54 @@ LOCALS @@
     extension_too_long_error db "Extension is too long - maximum allowed length is 3$"
     invalid_filename_error db "Filename cannot contain dollar sign$"
 .code
-    PUBLIC read_filename
+    PUBLIC read_filename, print_filename_read_error
+
+print_filename_read_error proc near
+        push dx
+        push ds
+        push ax
+
+        mov dx, @data
+        mov ds, dx
+
+        cmp al, 01h
+        je @@extension_error
+        cmp ah, 01h
+        je @@filename_invalid_character
+        lea dx, filename_too_long_error
+        jmp @@exit
+    @@filename_invalid_character:
+        lea dx, invalid_filename_error
+        jmp @@exit
+    @@extension_error:
+        cmp ah, 01h
+        je @@extension_invalid_character
+        lea dx, extension_too_long_error
+        jmp @@exit
+    @@extension_invalid_character:
+        lea dx, invalid_filename_error
+    @@exit:
+        mov ah, SYS_PRINT
+        int 21h
+
+        pop ax
+        pop ds
+        pop dx
+        ret
+print_filename_read_error endp
 
 ; Skips all blank characters from the beginning
 ; Uses es:[si]
 trim_start PROC near
 
-    trim_start_loop:
+    @@loop:
         cmp byte ptr es:[si], ' '
-        je trim_start_continue
+        je @@continue
 
         ret
-    trim_start_continue:
+    @@continue:
         inc si
-        jmp trim_start_loop
+        jmp @@loop
 
 trim_start ENDP
 
@@ -41,8 +75,7 @@ trim_start ENDP
 ;     es:[si] - current parsing command line argument
 ;     ds:[di] - pointer to the filename start
 ;     ds:[bx] - pointer to the extension start
-read_filename PROC far
-        push ax
+read_filename PROC near
         push cx
         push ds
 
@@ -86,7 +119,7 @@ read_filename PROC far
         inc di
         ; If extension is empty, set it to "com"
         cmp cl, 1h
-        je @@return
+        je @@success_return
         mov di, bx
         mov al, 'c'
         mov ds:[di], al
@@ -96,10 +129,11 @@ read_filename PROC far
         inc di
         mov al, 'm'
         mov ds:[di], al
+    @@success_return:
+        mov ax, 0
     @@return:
         pop ds
         pop cx
-        pop ax
 
         ret
     @@extension:
@@ -120,32 +154,15 @@ read_filename PROC far
         mov cl, 1h
         jmp @@loop
     @@invalid_character:
-        lea dx, invalid_filename_error
-        jmp read_filename_error_end
+        stc
+        mov ah, 01h
+        mov al, cl
+        jmp @@return
     @@max_length_exceeded:
-        mov dx, @data
-        mov ds, dx
-        ; Pick error message
-        cmp cl, 1h
-        je @@extension_error
-        lea dx, filename_too_long_error
-        jmp read_filename_error_end
-    @@extension_error:
-        push dx
-        
-        mov dx, @data
-        mov ds, dx
-        lea dx, extension_too_long_error
-    read_filename_error_end:
-        pop dx
-        ; Print error message
-        mov ah, SYS_PRINT
-        int INT_FUN_DISPATCH
-
-        ; Failure exit
-        mov al, EXIT_FAILURE
-        mov ah, SYS_TERMINATE
-        int INT_FUN_DISPATCH
+        stc
+        mov ah, 02h
+        mov al, cl
+        jmp @@return
 read_filename ENDP
 start:
 
