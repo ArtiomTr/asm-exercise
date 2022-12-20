@@ -6,7 +6,7 @@ LOCALS @@
 .data
 .code
 
-PUBLIC str_concat
+PUBLIC str_concat, str_len
 
 ; Concats two strings
 ; ds:[di] - destination
@@ -35,6 +35,24 @@ str_concat proc near
         pop bx
         ret
 str_concat endp
+
+; Calculates string length
+; ds:[dx] - source
+; cx - output
+str_len proc near
+        push si
+        mov si, dx
+        mov cx, 0
+    @@loop:
+        cmp byte ptr ds:[si], '$'
+        je @@exit
+        inc si
+        inc cx
+        jmp @@loop
+    @@exit:
+        pop si
+        ret
+str_len endp
 
 start:
 
