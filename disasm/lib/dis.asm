@@ -11,7 +11,9 @@ CMD_DAA equ 8
 STATE_TWO_OPERANDS equ 1
 STATE_READ_OFFSET equ 2
 STATE_IMMEDIATE equ 3
-STATE_DEEP_2 equ 4
+STATE_DEEP_1 equ 4
+STATE_DEEP_2 equ 5
+STATE_DEEP_3 equ 6
 
 ; ASCII symbols
 ASCII_CR equ 0Dh ; carriage return
@@ -50,6 +52,9 @@ LOCALS @@
     unknown_command db "nop  "
     command_break db ASCII_CR, ASCII_LF
     reg_operand db 0, 30 dup (?)
+    segment_register db 0FFh
+    ignore_reg db 0
+    bias db 0FFh
     reg_mem_operand db 0, 30 dup (?)
     operand_separator db ", "
     reg_byte     db "al"
@@ -76,6 +81,12 @@ LOCALS @@
     ea_binary_tag db "[bx+di"
                   db "[bp+si"
                   db "[bp+di"
+    seg_reg     db "es"
+    seg_reg_tag db "cs"
+                db "ss"
+                db "ds"
+    bias_text     db ", 1 "
+    bias_text_tag db ", cl"
 .code
     include .\lib\string.inc
 
@@ -83,6 +94,8 @@ LOCALS @@
     EA_BINARY_WIDTH equ [offset ea_binary_tag - offset ea_binary]
     REG_WORD_WIDTH equ [offset reg_word_tag - offset reg_word]
     REG_BYTE_WIDTH equ [offset reg_byte_tag - offset reg_byte]
+    SEG_REG_WIDTH equ [offset seg_reg_tag - offset seg_reg]
+    BIAS_WIDTH equ [offset bias_text_tag - offset bias_text]
 
     PUBLIC decode_buffer
 
@@ -234,7 +247,7 @@ dump_offset proc near
         inc di
         pop ax
 
-        cmp al, 01
+        cmp al, 01b
         je @@offset_end
 
         push ax
@@ -314,6 +327,26 @@ dump_directed_operands proc near
 
 dump_directed_operands endp
 
+dump_segment_register proc near
+        push cx ax dx
+
+        cmp segment_register, 0FFh
+        je @@exit
+        
+        lea dx, seg_reg
+        mov al, SEG_REG_WIDTH
+        mov ah, 0
+        mul segment_register
+        add dx, ax
+
+        mov cx, SEG_REG_WIDTH
+        mov ah, SYS_WRITE_FILE
+        int 21h
+    @@exit:
+        pop dx ax cx
+        ret
+dump_segment_register endp
+
 ; ah - r/m operand
 ; al - mod operand
 ; bh - w operand
@@ -381,6 +414,24 @@ decode_operand proc near
         ret
 decode_operand endp
 
+dump_bias proc near
+        cmp bias, 0FFh
+        je @@exit
+
+        push cx dx ax
+        lea dx, bias_text
+        mov ax, BIAS_WIDTH
+        mul bias
+        add dx, ax
+        
+        mov cx, BIAS_WIDTH
+        mov ah, SYS_WRITE_FILE
+        int 21h
+        pop ax dx cx
+    @@exit:
+        ret
+dump_bias endp
+
 dump_command proc near
         push cx
         cmp command, 0FFh
@@ -403,6 +454,12 @@ dump_command proc near
         cmp register, 0FFh
         je @@register_skip
 
+        cmp ignore_reg, 1
+        je @@register_skip
+
+        cmp bias, 0FFh
+        je @@register_skip
+
         mov ah, register
         mov al, 011b
         mov bh, _width
@@ -420,6 +477,10 @@ dump_command proc near
         pop bx
 
         call dump_directed_operands
+
+        call dump_segment_register
+
+        call dump_bias
 
         jmp @@exit
     @@unknown:
@@ -447,6 +508,9 @@ dump_command proc near
         mov current_offset_index, 0
         mov byte ptr reg_operand, 0
         mov byte ptr reg_mem_operand, 0
+        mov segment_register, 0FFh
+        mov ignore_reg, 0
+        mov bias, 0FFh
 
         pop cx
         ret
@@ -469,8 +533,14 @@ decode_byte proc near
         cmp state, 0
         je @@match_command
 
+        cmp state, STATE_DEEP_1
+        je @@match_command_1
+
         cmp state, STATE_DEEP_2
         je @@match_command_2
+
+        cmp state, STATE_DEEP_3
+        je @@match_command_3
 
         cmp state, STATE_TWO_OPERANDS
         je @@two_operands
@@ -596,11 +666,47 @@ decode_byte proc near
         je @@sub_2
 
         mov ah, al
+        and ah, 11100111b
+        cmp ah, 00000110b
+        je @@push_1
+
+        mov ah, al
+        and ah, 11111000b
+        cmp ah, 01010000b
+        je @@push_2
+
+        mov ah, al
+        and ah, 11111000b
+        cmp ah, 01000000b
+        je @@inc_1
+
+        mov ah, al
+        and ah, 11111110b
+        cmp ah, 11111110b
+        je @@deep_1
+
+        mov ah, al
         and ah, 11111100b
         cmp ah, 10000000b
         je @@deep_2
 
+        mov ah, al
+        and ah, 11111100b
+        cmp ah, 11010000b
+        je @@deep_3
+
         ; Unrecognized
+        call dump_command
+        ret
+    @@match_command_1:
+        mov ah, al
+        and ah, 00111000b
+        cmp ah, 00110000b
+        je @@push_3
+
+        cmp ah, 00000000b
+        je @@inc_2
+
         call dump_command
         ret
     @@match_command_2:
@@ -608,6 +714,15 @@ decode_byte proc near
         and ah, 00111000b
         cmp ah, 00101000b
         je @@sub_3
+
+        ; Unrecognized
+        call dump_command
+        ret
+    @@match_command_3:
+        mov ah, al
+        and ah, 00111000b
+        cmp ah, 00101000b
+        je @@shr
 
         ; Unrecognized
         call dump_command
@@ -628,6 +743,52 @@ decode_byte proc near
         mov command, CMD_DAA
         call dump_command
         ret
+    @@shr:
+        mov command, CMD_SHR
+        mov ignore_reg, 1
+        jmp @@two_operands
+    @@push_1:
+        ; Save segment register
+        mov ah, al
+        and ah, 00011000b
+        shr ah, 3
+        mov segment_register, ah
+        
+        mov command, CMD_PUSH
+
+        call dump_command
+        ret
+    @@push_2:
+        ; Save register
+        mov ah, al
+        and ah, 111b
+        mov register, ah
+        mov _width, 1
+
+        mov command, CMD_PUSH
+
+        call dump_command
+        ret
+    @@push_3:
+        mov command, CMD_PUSH
+
+        mov ignore_reg, 1
+        jmp @@two_operands
+    @@inc_1:
+        ; Save register
+        mov ah, al
+        and ah, 111b
+        mov register, ah
+        mov _width, 1
+
+        mov command, CMD_INC
+        call dump_command
+        ret
+    @@inc_2:
+        mov command, CMD_INC
+
+        mov ignore_reg, 1
+        jmp @@two_operands
     @@sub_1:
         ; Save width
         mov ah, al
@@ -644,20 +805,6 @@ decode_byte proc near
         mov command, CMD_SUB
         mov state, STATE_TWO_OPERANDS
         
-        ret
-    @@deep_2:
-        mov state, STATE_DEEP_2
-        ; Save width
-        mov ah, al
-        and ah, 1b
-        mov _width, ah
-
-        ; Save immediate argument size
-        mov ah, al
-        shr ah, 1
-        and ah, 1b
-        mov immediate_width, ah
-
         ret
     @@sub_2:
         ; Save width
@@ -681,6 +828,42 @@ decode_byte proc near
         mov immediate_output, offset reg_operand
         mov direction, 0
         jmp @@two_operands
+    @@deep_1:
+        mov state, STATE_DEEP_1
+        ; Save width
+        mov ah, al
+        and ah, 1b
+        mov _width, ah
+        ret
+    @@deep_2:
+        mov state, STATE_DEEP_2
+        ; Save width
+        mov ah, al
+        and ah, 1b
+        mov _width, ah
+
+        ; Save immediate argument size
+        mov ah, al
+        shr ah, 1
+        and ah, 1b
+        mov immediate_width, ah
+
+        ret
+    @@deep_3:
+        mov state, STATE_DEEP_3
+
+        ; Save width
+        mov ah, al
+        and ah, 1b
+        mov _width, ah
+        
+        ; Save bias
+        mov ah, al
+        and ah, 00000010b
+        shr ah, 1
+        mov bias, ah
+
+        ret
 decode_byte endp
 
 decode_buffer proc near
