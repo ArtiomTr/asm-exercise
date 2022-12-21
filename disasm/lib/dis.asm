@@ -53,23 +53,101 @@ LOCALS @@
                  db "bp"
                  db "si"
                  db "di"
-    ea_unary     db "si"
-    ea_unary_tag db "di"
-                 db "bp"
-                 db "bx"
-    ea_binary     db "[bx+si]"
-    ea_binary_tag db "[bx+di]"
-                  db "[bp+si]"
-                  db "[bp+di]"
+    ea_unary     db "[si"
+    ea_unary_tag db "[di"
+                 db "[bp"
+                 db "[bx"
+    ea_binary     db "[bx+si"
+    ea_binary_tag db "[bx+di"
+                  db "[bp+si"
+                  db "[bp+di"
 .code
     include .\lib\string.inc
 
-    EA_BINARY_WIDTH equ [offset ea_binary_tag - offset ea_binary]
     EA_UNARY_WIDTH equ [offset ea_unary_tag - offset ea_unary]
+    EA_BINARY_WIDTH equ [offset ea_binary_tag - offset ea_binary]
     REG_WORD_WIDTH equ [offset reg_word_tag - offset reg_word]
     REG_BYTE_WIDTH equ [offset reg_byte_tag - offset reg_byte]
 
     PUBLIC decode_buffer
+
+convert_offset proc near
+        push bx
+        mov ah, 0
+        mov bl, 10h
+        div bl
+        
+        cmp al, 10
+        jb @@first_decimal
+
+        add al, 'A' - 10
+        jmp @@second
+    @@first_decimal:
+        add al, '0'
+    @@second:
+        cmp ah, 10
+        jb @@second_decimal
+        add ah, 'A' - 10
+        jmp @@exit
+    @@second_decimal:
+        add ah, '0'
+    @@exit:
+        pop bx
+        ret
+convert_offset endp
+
+dump_offset proc near
+        cmp al, 0
+        je @@exit
+
+        mov bl, '+'
+        mov byte ptr ds:[di], bl
+        inc di
+
+        mov bl, '0'
+        mov byte ptr ds:[di], bl
+        inc di
+
+        push ax
+        mov ax, word ptr _offset
+        call convert_offset
+
+        mov bl, al
+        mov byte ptr ds:[di], bl
+        inc di
+
+        mov bl, ah
+        mov byte ptr ds:[di], bl
+        inc di
+        pop ax
+
+        cmp al, 01
+        je @@offset_end
+
+        push ax
+        mov ax, word ptr _offset
+        mov al, ah
+        call convert_offset
+
+        mov bl, al
+        mov byte ptr ds:[di], bl
+        inc di
+
+        mov bl, ah
+        mov byte ptr ds:[di], bl
+        inc di
+        pop ax
+    @@offset_end:
+        mov bl, 'h'
+        mov byte ptr ds:[di], bl
+        inc di
+    @@exit:
+        mov bl, ']'
+        mov byte ptr ds:[di], bl
+        inc di
+
+        ret
+dump_offset endp
 
 dump_directed_operands proc near
         push si di
@@ -154,9 +232,11 @@ decode_operand proc near
     @@register_decode:
         mov cx, REG_BYTE_WIDTH
     @@output:
+        push ax
         mov al, ah
         mul cl
         add si, ax
+        pop ax
     @@output_loop:
         mov bl, byte ptr ds:[si]
         mov byte ptr ds:[di], bl
@@ -164,6 +244,10 @@ decode_operand proc near
         inc di
         loop @@output_loop
 
+        cmp al, 011b
+        je @@exit
+        call dump_offset
+    @@exit:
         mov bl, '$'
         mov byte ptr ds:[di], bl
 
@@ -287,6 +371,7 @@ decode_byte proc near
         call dump_command
         ret
     @@schedule_offset_read:
+        mov current_offset_index, ah
         mov state, STATE_READ_OFFSET
 
         ret
