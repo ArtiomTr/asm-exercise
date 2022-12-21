@@ -471,6 +471,7 @@ dump_command proc near
 
         mov ah, register_memory
         mov al, mode
+        mov bh, _width
         lea di, reg_mem_operand
         call decode_operand
     @@reg_mem_skip:
@@ -724,6 +725,11 @@ decode_byte proc near
         cmp ah, 00101000b
         je @@shr
 
+        mov ah, al
+        and ah, 00111000b
+        cmp ah, 00001000b
+        je @@ror
+
         ; Unrecognized
         call dump_command
         ret
@@ -745,6 +751,10 @@ decode_byte proc near
         ret
     @@shr:
         mov command, CMD_SHR
+        mov ignore_reg, 1
+        jmp @@two_operands
+    @@ror:
+        mov command, CMD_ROR
         mov ignore_reg, 1
         jmp @@two_operands
     @@push_1:
