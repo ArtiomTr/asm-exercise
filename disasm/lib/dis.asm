@@ -162,6 +162,53 @@ dump_immediate proc near
         ret
 dump_immediate endp
 
+dump_address proc near
+        push ax
+        
+        mov bl, '['
+        mov byte ptr ds:[di], bl
+        inc di
+        
+        mov ax, word ptr _offset
+        call convert_offset
+
+        mov bl, al
+        mov byte ptr ds:[di], bl
+        inc di
+
+        mov bl, ah
+        mov byte ptr ds:[di], bl
+        inc di
+        pop ax
+
+        cmp al, 01
+        je @@offset_end
+
+        push ax
+        mov ax, word ptr _offset
+        mov al, ah
+        call convert_offset
+
+        mov bl, al
+        mov byte ptr ds:[di], bl
+        inc di
+
+        mov bl, ah
+        mov byte ptr ds:[di], bl
+        inc di
+        pop ax
+    @@offset_end:
+        mov bl, 'h'
+        mov byte ptr ds:[di], bl
+        inc di
+    @@exit:
+        mov bl, ']'
+        mov byte ptr ds:[di], bl
+        inc di
+
+        ret
+dump_address endp
+
 dump_offset proc near
         cmp al, 0
         je @@exit
@@ -292,7 +339,14 @@ decode_operand proc near
         lea si, ea_unary
         mov cx, EA_UNARY_WIDTH
 
-        jmp @@output
+        cmp al, 00b
+        jne @@output
+
+        cmp ah, 10b
+        jne @@output
+
+        call dump_address
+        jmp @@exit
     @@register:
         cmp bh, 1
         je @@word_register
@@ -494,6 +548,13 @@ decode_byte proc near
         cmp mode, 10b
         je @@schedule_offset_read
 
+        cmp mode, 00b
+        jne @@skip_direct_address_read
+
+        cmp register_memory, 110b
+        je @@schedule_offset_read
+
+    @@skip_direct_address_read:
         cmp immediate_output, 0
         je @@skip_immediate_parse
         
@@ -506,6 +567,10 @@ decode_byte proc near
         mov current_offset_index, ah
         mov state, STATE_READ_OFFSET
 
+        cmp ah, 0
+        jne @@schedule_offset_read_perform
+        mov current_offset_index, 2
+    @@schedule_offset_read_perform:
         ret
     @@match_command:
         cmp al, 00111111b
